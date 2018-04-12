@@ -190,10 +190,18 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
+  
+
+
+
   acquire(&ptable.lock);
+  // pushcli();
+  // cprintf("Inside userinit. p->state before changing to RUNNABLE: %d\n", p->state);
 
   p->state = RUNNABLE;
-
+  
+  // cprintf("Inside userinit. p->state after changing to RUNNABLE: %d\n", p->state);
+  // popcli();
   release(&ptable.lock);
 }
 
@@ -258,7 +266,11 @@ fork(void)
 
   acquire(&ptable.lock);
 
+  // cprintf("Inside userinit. p->state before changing to RUNNABLE: %d\n", p->state);
+
   np->state = RUNNABLE;
+
+  // cprintf("Inside userinit. p->state after changing to RUNNABLE: %d\n", p->state);
 
   release(&ptable.lock);
 
@@ -375,17 +387,19 @@ scheduler(void)
     sti();
 
     // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
+    // acquire(&ptable.lock);
+    pushcli();
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+      if(!cas(&p->state, RUNNABLE, RUNNING)) { // Find the first RUNNABLE proc and change its state to RUNNING
         continue;
+      }
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       c->proc = p;
       switchuvm(p);
-      p->state = RUNNING;
+      // p->state = RUNNING;  // ORIGINALLY WAS HERE
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
@@ -393,10 +407,27 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-    }
-    release(&ptable.lock);
 
+      // Change each negative state to positive
+      if (cas(&p->state, NEG_SLEEPING, SLEEPING)) {
+        // TODO: Find out if the following transition is necessary
+        // if (cas(&p->killed, 1, 0))
+        //   p->state = RUNNABLE;
+      }
+      if (cas(&p->state, NEG_RUNNABLE, RUNNABLE)) {
+      }
+      if (p->state == NEG_ZOMBIE) {
+        freeproc(p);
+        if (cas(&p->state, NEG_ZOMBIE, ZOMBIE))
+          wakeup1(p->parent);
+      }
+    }
+    // release(&ptable.lock);
+    popcli();
   }
+
+
+
 }
 
 // Enter scheduler.  Must hold only ptable.lock
