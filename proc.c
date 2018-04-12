@@ -69,11 +69,22 @@ myproc(void) {
 int 
 allocpid(void) 
 {
-  int pid;
-  acquire(&ptable.lock);
-  pid = nextpid++;
-  release(&ptable.lock);
-  return pid;
+  // Original Impl:
+    // int pid;
+    // acquire(&ptable.lock);
+    // pid = nextpid++;
+    // release(&ptable.lock);
+    // return pid;
+
+
+  int old_pid;
+  do{
+    
+    old_pid = nextpid;
+
+  } while(!cas(&nextpid, old_pid, old_pid+1)); // if nextpid == old_pid then nextpid = old_pid+1 (i.e, nextpid++)
+
+  return old_pid+1;
 }
 
 
@@ -88,18 +99,39 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
-  acquire(&ptable.lock);
+  // Original Impl:
+    // acquire(&ptable.lock);
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == UNUSED)
-      goto found;
+    // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    //   if(p->state == UNUSED)
+    //     goto found;
 
-  release(&ptable.lock);
-  return 0;
+    // release(&ptable.lock);
+    // return 0;
 
-found:
-  p->state = EMBRYO;
-  release(&ptable.lock);
+  /*
+    run over the ptable and find the first unsued proc.
+    if found the break from the for loop and do cas.
+    The thing is that if the state of p remains UNSUSED until cas, it will change to EMBRYO and get out of the while loop.
+    otherwise, the state was changed until cas and then cas will fail and we will look for another UNUSED proc from the beginning.
+    if we went all over the ptable and didnt find an UNUSED proc, it means that the table is full of necessary procs and the allocproc function should fail (return 0).
+  */
+  pushcli(); // disable interrupts to avoid interuppt handeling during the following code so that the code will be atomic.
+  do {
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+      if(p->state == UNUSED)
+        break;
+    if (p == &ptable.proc[NPROC]) {
+      popcli();
+      return 0; // ptable is full
+    }
+  } while (!cas(&p->state, UNUSED, EMBRYO));
+  popcli();
+
+  // Original Impl:
+    // found:
+    // p->state = EMBRYO;
+    // release(&ptable.lock);
   p->pid = allocpid();
 
 

@@ -144,6 +144,37 @@ lcr3(uint val)
   asm volatile("movl %0,%%cr3" : : "r" (val));
 }
 
+
+//Our Addition
+static inline int
+cas(volatile void *addr, int expected, int newval){
+  
+  // OUR IMPLEMENTATION
+  int ret = 1;
+  asm volatile("lock; cmpxchgl %3, (%2)\n\t" // if(eax == [addr]) then [addr] = newval and return 0. else return non-zero. it compare the value with eax because that is how the cmpxchgl function is defined.
+                "jz xchg_success\n\t"
+                "movl $0, %0\n\t"     // xchg failed so assign ret with 0
+                "xchg_success:\n\t"
+                : "=m"(ret)           // ret reffered with %0. m because ret resides in the memory
+                : "a"(expected), "r"(addr), "r"(newval)  /* put 'exptected' inside register eax (%1).
+                                                            put 'addr' inside an available register (%2).
+                                                            put 'newval' inside an available register (%3).
+                                                         */
+                : "memory");          // the code is changing the contents of memory (change of the ret value which resides in the memory).
+
+
+ // asm volatile("lock; cmpxchgl %3, (%2)\n\t" // eax == [ebx] ? [ebx] = newval : eax = [ebx]
+ //                "jz cas_success\n\t"
+ //                "movl $0, %0\n\t"
+ //                "cas_success:\n\t"
+ //                : "=m"(ret)
+ //                : "a"(expected), "b"(addr), "r"(newval)
+ //                : "memory");
+
+  return ret;
+
+}
+
 //PAGEBREAK: 36
 // Layout of the trap frame built on the stack by the
 // hardware and by trapasm.S, and passed to trap().
