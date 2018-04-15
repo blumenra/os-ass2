@@ -313,7 +313,7 @@ exit(void)
   }
 
   // Jump into the scheduler, never to return.
-  curproc->state = ZOMBIE;
+  //curproc->state = ZOMBIE;
   sched();
   panic("zombie exit");
 }
@@ -327,34 +327,49 @@ wait(void)
   int havekids, pid;
   struct proc *curproc = myproc();
   
-  acquire(&ptable.lock);
+  //acquire(&ptable.lock);
+  pushcli();
   for(;;){
     // Scan through table looking for exited children.
+    if (!cas(&curproc->state, RUNNING, NEG_SLEEPING))
+      panic("scheduler: cas failed");
+
+    curproc->chan = curproc;
+
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->parent != curproc)
         continue;
       havekids = 1;
-      if(p->state == ZOMBIE){
+      if(cas(&p->state, ZOMBIE, NEG_UNUSED)){
         // Found one.
         pid = p->pid;
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
-        p->state = UNUSED;
-        release(&ptable.lock);
+        curproc->chan = 0;
+        cas(&curproc->state, NEG_SLEEPING, RUNNING);
+
+        cas(&p->state, NEG_UNUSED, UNUSED);
+        popcli();
+        //release(&ptable.lock);
         return pid;
       }
     }
 
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
-      release(&ptable.lock);
+      //release(&ptable.lock);
+      curproc->chan = 0;
+      if (!cas(&curproc->state, NEG_SLEEPING, RUNNING))
+        panic("Inside wait(): state must be NEG_SLEEPING");
+      popcli();
       return -1;
     }
 
+    sched();
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+    //sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
 }
 
@@ -402,8 +417,8 @@ scheduler(void)
       // Change each negative state to positive
       if (cas(&p->state, NEG_SLEEPING, SLEEPING)) {
         // TODO: Find out if the following transition is necessary
-        // if (cas(&p->killed, 1, 0))
-        //   p->state = RUNNABLE;
+        if (cas(&p->killed, 1, 0))
+          p->state = RUNNABLE;
       }
       if (cas(&p->state, NEG_RUNNABLE, RUNNABLE)) {
       }
@@ -502,23 +517,12 @@ sleep(void *chan, struct spinlock *lk)
     panic("sleep without lk");
 
 
-  //OUR Impl. If we choose the following impl, we should remove the original code in below our impl..
-  // if(lk == &ptable.lock){  //DOC: sleeplock0
-  //   release(&ptable.lock);  //DOC: sleeplock1
-  //   p->chan = chan;
-    
-  //   if(!cas(&p->state, RUNNING, NEG_SLEEPING)
-  //     panic("");
-    
+  pushcli();
+  p->chan = chan;
 
-  //   sched();
-
-  //   p->chan = 0;
-  // }
-
-
-
-
+  // Go to sleep.
+  if (!cas(&p->state, RUNNING, NEG_SLEEPING))
+    panic("sleep: cas failed");
 
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
@@ -527,23 +531,64 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
   if(lk != &ptable.lock){  //DOC: sleeplock0
-    acquire(&ptable.lock);  //DOC: sleeplock1
+    // acquire(&ptable.lock);  //DOC: sleeplock1
     release(lk);
   }
-  // Go to sleep.
-  p->chan = chan;
-  p->state = SLEEPING;
 
   sched();
 
-  // Tidy up.
-  p->chan = 0;
-
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
-    release(&ptable.lock);
+    // release(&ptable.lock);
     acquire(lk);
   }
+  popcli();
+
+
+
+  // //OUR Impl. If we choose the following impl, we should remove the original code in below our impl..
+  // pushcli();
+  // if(lk == &ptable.lock){  //DOC: sleeplock0
+  //   release(&ptable.lock);  //DOC: sleeplock1
+  //   p->chan = chan;
+    
+  //   if(!cas(&p->state, RUNNING, NEG_SLEEPING))
+  //     panic("");
+    
+
+  //   // sched();
+
+  //   p->chan = 0;
+  // }
+  // popcli();
+
+
+
+
+  // // Must acquire ptable.lock in order to
+  // // change p->state and then call sched.
+  // // Once we hold ptable.lock, we can be
+  // // guaranteed that we won't miss any wakeup
+  // // (wakeup runs with ptable.lock locked),
+  // // so it's okay to release lk.
+  // if(lk != &ptable.lock){  //DOC: sleeplock0
+  //   acquire(&ptable.lock);  //DOC: sleeplock1
+  //   release(lk);
+  // }
+  // // Go to sleep.
+  // p->chan = chan;
+  // p->state = SLEEPING;
+
+  // sched();
+
+  // // Tidy up.
+  // p->chan = 0;
+
+  // // Reacquire original lock.
+  // if(lk != &ptable.lock){  //DOC: sleeplock2
+  //   release(&ptable.lock);
+  //   acquire(lk);
+  // }
 }
 
 //PAGEBREAK!
