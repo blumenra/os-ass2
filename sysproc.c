@@ -99,3 +99,25 @@ sys_sigprocmask(void){
     return -1;
   return sigprocmask((uint)sigmask);
 }
+
+int
+sys_signal(void){
+
+  int signum;
+  sighandler_t sigHandler;
+
+  if(argint(0, &signum) < 0)
+    return -1;
+  if(argptr(1, (void*)&sigHandler, sizeof(sigHandler)) < 0)
+    return -1;
+
+  //maybe the previous handler should be return here. have a dilema if do casting or change the return value...
+  return (int)signal(signum, sigHandler);
+}
+
+int
+sys_sigret(void){
+
+  sigret();
+  return 1;
+}

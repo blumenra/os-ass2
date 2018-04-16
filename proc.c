@@ -734,3 +734,17 @@ sigprocmask(uint sigmask){
 
   return oldSigmask;
 }
+
+sighandler_t
+signal(int signum, sighandler_t handler){
+
+  cprintf("Inside signal()..");
+  return handler;
+}
+
+void
+sigret(void){
+
+  //cprintf("Inside sigret:)))");
+}
+
