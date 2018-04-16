@@ -1,3 +1,16 @@
+#define SIG_DFL -1   // default signal handling
+#define SIG_IGN 1    // ignore signals
+
+#define SIGKILL 9
+#define SIGSTOP 17
+#define SIGCONT 19
+
+#define NUM_OF_SIG_HANDLERS 32
+
+
+
+
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -49,6 +62,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  //FOR HANDLING SIGNALS
+  uint pending_sigs;                  // 32bit array, stored as type uint
+  uint sig_masks;                     // 32bit array, stored as type uint.
+  void* sig_handlers[NUM_OF_SIG_HANDLERS];             // Array of size 32, of type void*.
+  struct trapframe *user_trap_backup; //Trapframe struct.
 };
 
 // Process memory is laid out contiguously, low addresses first:

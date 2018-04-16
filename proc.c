@@ -156,6 +156,16 @@ allocproc(void)
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+
+  //SIGNAL HANDLING
+  p->pending_sigs = 0;
+  p->sig_masks = 0;
+
+  for(int i=0; i < NUM_OF_SIG_HANDLERS; i++){
+
+    p->sig_handlers[i] = (void*) SIG_DFL;
+  }
+
   return p;
 }
 
@@ -247,6 +257,11 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+
+  //COPY SIGNALS MASK AND HANDLERS
+  np->sig_masks = curproc->sig_masks;
+  for(int k=0; k < NUM_OF_SIG_HANDLERS; k++)
+    np->sig_handlers[k] = curproc->sig_handlers[k];
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -613,6 +628,8 @@ wakeup1(void *chan)
       }
       if(p->state == SLEEPING){
         if (cas(&p->state, SLEEPING, NEG_RUNNABLE)) {
+          
+
           p->chan = 0;
           
           // Change state to RUNNABLE here and not wait for scheduler() to change
