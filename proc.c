@@ -301,7 +301,7 @@ exit(void)
     panic("exit: cas #1 failed");
 
   // Parent might be sleeping in wait().
-  //wakeup1(curproc->parent);
+  wakeup1(curproc->parent);
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -423,7 +423,7 @@ scheduler(void)
       if (cas(&p->state, NEG_RUNNABLE, RUNNABLE)) {
       }
       if (p->state == NEG_ZOMBIE) {
-        //freeproc(p);
+        
           kfree(p->kstack);
           p->kstack = 0;
           freevm(p->pgdir);
@@ -652,8 +652,11 @@ kill(int pid)
       // Wake process from sleep if necessary.
       //if(p->state == SLEEPING)
         //p->state = RUNNABLE;
+      
+      // didnt add NEG_SLEEPING case because it's handled in schedular() after the context switch
       cas(&p->state, SLEEPING, RUNNABLE);
-            
+      
+
       //release(&ptable.lock);
       popcli();
       return 0;
@@ -672,17 +675,21 @@ void
 procdump(void)
 {
   static char *states[] = {
-  [UNUSED]    "unused",
-  [EMBRYO]    "embryo",
-  [SLEEPING]  "sleep ",
-  [RUNNABLE]  "runble",
-  [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
+  [UNUSED]       "unused",
+  [NEG_UNUSED]   "neg_unused",
+  [EMBRYO]       "embryo",
+  [SLEEPING]     "sleep ",
+  [NEG_SLEEPING] "neg_sleep ",
+  [RUNNABLE]     "runble",
+  [NEG_RUNNABLE] "neg_runnable",
+  [RUNNING]      "run   ",
+  [ZOMBIE]       "zombie",
+  [NEG_ZOMBIE]   "neg_zombie"
   };
-  int i;
+  //int i;
   struct proc *p;
   char *state;
-  uint pc[10];
+  //uint pc[10];
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
@@ -692,11 +699,11 @@ procdump(void)
     else
       state = "???";
     cprintf("%d %s %s", p->pid, state, p->name);
-    if(p->state == SLEEPING){
-      getcallerpcs((uint*)p->context->ebp+2, pc);
-      for(i=0; i<10 && pc[i] != 0; i++)
-        cprintf(" %p", pc[i]);
-    }
+    // if(p->state == SLEEPING){
+    //   getcallerpcs((uint*)p->context->ebp+2, pc);
+    //   for(i=0; i<10 && pc[i] != 0; i++)
+    //     cprintf(" %p", pc[i]);
+    // }
     cprintf("\n");
   }
 }
