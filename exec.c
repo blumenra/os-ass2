@@ -10,6 +10,7 @@
 int
 exec(char *path, char **argv)
 {
+
   char *s, *last;
   int i, off;
   uint argc, sz, sp, ustack[3+MAXARG+1];
@@ -105,10 +106,10 @@ exec(char *path, char **argv)
   //RESET ALL SIGNAL HANDLERS
   for(int k=0; k < NUM_OF_SIG_HANDLERS; k++){
 
-    if(p->sig_handlers[k] != SIG_IGN)
-      p->sig_handlers[k] = (void*) SIG_DFL;
+    if((int)curproc->sig_handlers[k] != SIG_IGN && (int)curproc->sig_handlers[k] != SIG_DFL)
+      curproc->sig_handlers[k] = (void*) SIG_DFL;
   }
-  
+
   return 0;
 
  bad:

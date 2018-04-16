@@ -724,3 +724,13 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+uint
+sigprocmask(uint sigmask){
+
+  uint oldSigmask = myproc()->sig_masks;
+
+  myproc()->sig_masks = sigmask;
+
+  return oldSigmask;
+}
