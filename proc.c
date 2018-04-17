@@ -694,9 +694,9 @@ kill(int pid, int signum)
       setSignal(p, signum, 1);
 
       /*
-      * commented it out and moved it to sigkill handler
+      * should be moved to sigkill handler
       */
-      //p->killed = 1;
+      p->killed = 1;
 
 
       // Wake process from sleep if necessary.
@@ -706,9 +706,9 @@ kill(int pid, int signum)
       // didnt add NEG_SLEEPING case because it's handled in schedular() after the context switch
       
       /*
-      * commented it out and moved it to sigkill handler
+      * should be moved to sigkill handler
       */
-      //cas(&p->state, SLEEPING, RUNNABLE);
+      cas(&p->state, SLEEPING, RUNNABLE);
       
 
       //release(&ptable.lock);
