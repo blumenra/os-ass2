@@ -7,7 +7,16 @@
 #include "proc.h"
 #include "spinlock.h"
 
+int setSignal(struct proc *p, int signum, int swtch);
+int setSigFaild(struct proc *p, int signum, int swtch);
 int sigFaild(int signum, sighandler_t handler);
+int turnOnSignal(struct proc *p, int signum);
+int turnDownSignal(struct proc *p, int signum);
+int isSignalOn(struct proc *p, int signal);
+int handleSigKill(struct proc *p);
+int handleSigStop(struct proc *p);
+int handleSigCont(struct proc *p);
+int isValidSig(int signum);
 
 struct {
   struct spinlock lock;
@@ -417,6 +426,16 @@ scheduler(void)
         continue;
       }
 
+      if(isSignalOn(p, SIGSTOP)){
+        if(isSignalOn(p, SIGCONT)){
+          setSignal(p, SIGSTOP, 0); //turn off SIGSTOP
+          setSignal(p, SIGCONT, 0); //turn off SIGCONT
+        }
+        else{
+          continue;
+        }
+      }
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -667,14 +686,25 @@ kill(int pid, int signum)
   pushcli();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      p->killed = 1;
+
       setSignal(p, signum, 1);
+
+      /*
+      * commented it out and moved it to sigkill handler
+      */
+      //p->killed = 1;
+
+
       // Wake process from sleep if necessary.
       //if(p->state == SLEEPING)
         //p->state = RUNNABLE;
       
       // didnt add NEG_SLEEPING case because it's handled in schedular() after the context switch
-      cas(&p->state, SLEEPING, RUNNABLE);
+      
+      /*
+      * commented it out and moved it to sigkill handler
+      */
+      //cas(&p->state, SLEEPING, RUNNABLE);
       
 
       //release(&ptable.lock);
@@ -760,7 +790,7 @@ sigret(void){
 int
 sigFaild(int signum, sighandler_t handler) {
 
-  if(signum < 0 || 31 < signum)
+  if(!isValidSig(signum))
     return 1;
   
   //TODO: IMPLEMENT once we know what it means that signal() fails
@@ -782,26 +812,74 @@ setSignal(struct proc *p, int signum, int swtch){
     return turnDownSignal(p, signum);
 }
 
+/*
+*DO NOT USE THIS DIRECTLY, BUT ONLY BY setSignal(..., 1)
+*/
 int
 turnOnSignal(struct proc *p, int signum){
+  
+  if(!isValidSig(signum))
+    return 0;
 
   p->pending_sigs |= 1 << signum;
+  return 1;
 }
 
+/*
+*DO NOT USE THIS DIRECTLY, BUT ONLY BY setSignal(..., 0)
+*/
 int
 turnDownSignal(struct proc *p, int signum){
 
+  if(!isValidSig(signum))
+    return 0;
+
   p->pending_sigs &= ~(1 << signum);
+  return 1;
 }
 
 int
 setSigFaild(struct proc *p, int signum, int swtch){
   
-  if(signum < 0 || 31 < signum || swtch < 0)
+  if(!isValidSig(signum)|| swtch < 0)
     return 1;
 
   if(p == 0)
     return 1;
 
   return 0;
+}
+
+int
+isSignalOn(struct proc *p, int signal){
+  
+  uint ret = (p->pending_sigs >> signal) & 1;
+  return ret;
+}
+
+int
+handleSigKill(struct proc *p){
+  
+  p->killed = 1;
+  cas(&p->state, SLEEPING, RUNNABLE);
+
+  return 0;
+}
+
+int
+handleSigStop(struct proc *p){
+  
+  return 0;
+}
+
+int
+handleSigCont(struct proc *p){
+  
+  return 0;
+}
+
+int
+isValidSig(int signum){
+
+  return 0 <= signum && signum < 32;
 }
