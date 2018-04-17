@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
+int sigFaild(int signum, sighandler_t handler);
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -738,13 +740,29 @@ sigprocmask(uint sigmask){
 sighandler_t
 signal(int signum, sighandler_t handler){
 
-  cprintf("Inside signal()..");
-  return handler;
+  struct proc *p = myproc();
+
+  if(sigFaild(signum, handler))
+    return (sighandler_t)-2;
+
+  sighandler_t oldHandler = p->sig_handlers[signum];
+  p->sig_handlers[signum] = handler;
+
+  return oldHandler;
 }
 
 void
 sigret(void){
-
   //cprintf("Inside sigret:)))");
 }
 
+int
+sigFaild(int signum, sighandler_t handler) {
+
+  if(signum < 0 || 31 < signum)
+    return 1;
+  
+  //TODO: IMPLEMENT once we know what it means that signal() fails
+  
+  return 0;
+}

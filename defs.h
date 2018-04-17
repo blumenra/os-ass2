@@ -1,3 +1,5 @@
+typedef void (*sighandler_t)(int);
+
 struct buf;
 struct context;
 struct file;
