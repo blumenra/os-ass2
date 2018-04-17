@@ -659,7 +659,7 @@ wakeup(void *chan)
 // Process won't exit until it returns
 // to user space (see trap in trap.c).
 int
-kill(int pid)
+kill(int pid, int signum)
 {
   struct proc *p;
 
@@ -668,6 +668,7 @@ kill(int pid)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
       p->killed = 1;
+      setSignal(p, signum, 1);
       // Wake process from sleep if necessary.
       //if(p->state == SLEEPING)
         //p->state = RUNNABLE;
@@ -764,5 +765,43 @@ sigFaild(int signum, sighandler_t handler) {
   
   //TODO: IMPLEMENT once we know what it means that signal() fails
   
+  return 0;
+}
+
+int
+setSignal(struct proc *p, int signum, int swtch){
+
+  if(setSigFaild(p, signum, swtch)){
+
+    return -1;
+  }
+
+  if(swtch)
+    return turnOnSignal(p, signum);
+  else
+    return turnDownSignal(p, signum);
+}
+
+int
+turnOnSignal(struct proc *p, int signum){
+
+  p->pending_sigs |= 1 << signum;
+}
+
+int
+turnDownSignal(struct proc *p, int signum){
+
+  p->pending_sigs &= ~(1 << signum);
+}
+
+int
+setSigFaild(struct proc *p, int signum, int swtch){
+  
+  if(signum < 0 || 31 < signum || swtch < 0)
+    return 1;
+
+  if(p == 0)
+    return 1;
+
   return 0;
 }
