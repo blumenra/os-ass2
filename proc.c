@@ -17,6 +17,10 @@ int handleSigKill(struct proc *p);
 int handleSigStop(struct proc *p);
 int handleSigCont(struct proc *p);
 int isValidSig(int signum);
+int isMaskOn(struct proc *p, int sig);
+void handleUserModeSigs(struct proc *p, int sig);
+void handlePendingSigs(/*???*/);
+  
 
 struct {
   struct spinlock lock;
@@ -858,7 +862,7 @@ isSignalOn(struct proc *p, int signal){
 }
 
 int
-handleSigKill(struct proc *p){
+sigKillDefaultHandle(struct proc *p){
   
   p->killed = 1;
   cas(&p->state, SLEEPING, RUNNABLE);
@@ -867,13 +871,13 @@ handleSigKill(struct proc *p){
 }
 
 int
-handleSigStop(struct proc *p){
+sigStopDefaultHandle(struct proc *p){
   
   return 0;
 }
 
 int
-handleSigCont(struct proc *p){
+sigContDefaultHandle(struct proc *p){
   
   return 0;
 }
@@ -882,4 +886,60 @@ int
 isValidSig(int signum){
 
   return 0 <= signum && signum < 32;
+}
+
+void
+handlePendingSigs(/*???*/){
+
+  struct proc *p = myproc();   // = process we handle..(how to know???)
+  
+  for(int sig=0; sig < 32; sig++){
+
+    if(!isSignalOn(p, sig)) // if currently iterated signal is on..
+      continue;
+    
+    if(isMaskOn(p, sig))
+      continue;
+
+    if((int)p->sig_handlers[sig] == SIG_IGN)
+      continue;
+    
+
+    switch(sig) {
+      case SIGKILL:
+
+          if((int)p->sig_handlers[sig] == SIG_DFL)
+            sigKillDefaultHandle(p);
+      
+      case SIGSTOP:
+          if((int)p->sig_handlers[sig] == SIG_DFL)
+            sigStopDefaultHandle(p);
+
+      case SIGCONT:
+          if((int)p->sig_handlers[sig] == SIG_DFL)
+            sigContDefaultHandle(p);
+      
+       default:
+          if((int)p->sig_handlers[sig] == SIG_DFL)
+            sigKillDefaultHandle(p);
+          else
+            handleUserModeSigs(p, sig);
+    }
+  }
+}
+
+int
+isMaskOn(struct proc *p, int sig){
+  
+  if(!isValidSig(sig))
+    panic("isMaskOn: Invalid signum");
+
+  uint ret = (p->sig_masks >> sig) & 1;
+  return ret;
+} 
+
+void
+handleUserModeSigs(struct proc *p, int sig){
+
+
 }
