@@ -691,7 +691,6 @@ kill(int pid, int signum)
 {
   struct proc *p;
 
-  cprintf("Going to set %d signal on for proc %d\n", signum, pid);
   //acquire(&ptable.lock);
   pushcli();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -870,7 +869,6 @@ turnOnSignal(struct proc *p, int signum){
   if(!isValidSig(signum))
     return 0;
 
-  cprintf("turning signal %d of proc %d on\n", signum, p->pid);
   p->pending_sigs |= 1 << signum;
   return 1;
 }
@@ -884,7 +882,6 @@ turnDownSignal(struct proc *p, int signum){
   if(!isValidSig(signum))
     return 0;
 
-  cprintf("turning signal %d of proc %d off\n", signum, myproc()->pid);
   p->pending_sigs &= ~(1 << signum);
   return 1;
 }
@@ -911,21 +908,15 @@ isSignalOn(struct proc *p, int signal){
 int
 sigKillDefaultHandle(struct proc *p){
   
-  cprintf("handeling sigkill defaultly..\n");
-
   p->killed = 1;
 
-  // cas(&p->state, RUNNING, RUNNABLE);
   // cas(&p->state, SLEEPING, RUNNABLE);
-
   return 0;
 }
 
 int
 sigStopDefaultHandle(struct proc *p){
   
-  cprintf("handeling sigStop defaultly..\n");
-
   if(isSignalOn(p, SIGCONT)){
     setSignal(p, SIGSTOP, 0); //turn off SIGSTOP
     setSignal(p, SIGCONT, 0); //turn off SIGCONT
@@ -938,7 +929,6 @@ sigStopDefaultHandle(struct proc *p){
 int
 sigContDefaultHandle(struct proc *p){
   
-  cprintf("handeling sigCont defaultly..\n");
   if(isSignalOn(p, SIGSTOP)){
     setSignal(p, SIGSTOP, 0); //turn off SIGSTOP
     return 1;
