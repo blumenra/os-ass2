@@ -40,7 +40,9 @@ trapret:
   addl $0x8, %esp  # trapno and errcode
   iret
 
-# ;sigret_L:
-#   ;movl $SYS_sigret, %eax
-#   ;int $64
-
+.globl sigret_L_start
+.globl sigret_L_end
+sigret_L_start:
+  movl $SYS_sigret, %eax
+  int $64
+sigret_L_end:

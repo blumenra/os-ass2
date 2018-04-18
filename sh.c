@@ -13,7 +13,7 @@
 
 #define MAXARGS 10
 
-int bla(int);
+void bla(int);
 
 struct cmd {
   int type;
@@ -167,18 +167,21 @@ main(void)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
     }
+    
     if(fork1() == 0){
 
-      //signal(5, (sighandler_t)bla);
       runcmd(parsecmd(buf));
     }
+
+    printf(1, "sh: setting handler bla to signal %d\n", 5);
+    signal(5, (sighandler_t)bla);
     wait();
   }
   exit();
 }
 
-int bla(int num){
-  return num;
+void bla(int num){
+  printf(1, "Inside bla**************************************\n");
 }
 
 void

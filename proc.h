@@ -102,6 +102,7 @@ struct proc {
   //FOR HANDLING SIGNALS
   uint pending_sigs;                  // 32bit array, stored as type uint
   uint sig_masks;                     // 32bit array, stored as type uint.
+  // uint backup_sig_masks;                     // 32bit array, stored as type uint.
   void* sig_handlers[NUM_OF_SIG_HANDLERS];             // Array of size 32, of type void*.
   struct trapframe user_trap_backup; //Trapframe struct.
 };

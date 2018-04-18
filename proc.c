@@ -7,6 +7,9 @@
 #include "proc.h"
 #include "spinlock.h"
 
+extern void sigret_L_start(void);
+extern void sigret_L_end(void);
+
 int setSignal(struct proc *p, int signum, int swtch);
 int setSigFaild(struct proc *p, int signum, int swtch);
 int sigFaild(int signum, sighandler_t handler);
@@ -20,6 +23,12 @@ int isValidSig(int signum);
 int isMaskOn(struct proc *p, int sig);
 void handleUserModeSigs(int sig);
 void handlePendingSigs(/*???*/);
+int setMask(struct proc *p, int signum, int swtch);
+int turnOnMask(struct proc *p, int signum);
+int turnOffMask(struct proc *p, int signum);
+void turnOnAllMasks(struct proc *p);
+void turnOffAllMasks(struct proc *p);
+void turnOnAllMasksBut(struct proc *p, int sig_mask);
   
 
 struct {
@@ -749,7 +758,40 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+
+    cprintf("\n");
+    cprintf("pid: %d, state: %s, name: %s\n", p->pid, state, p->name);
+
+    cprintf("  pending sigs:");
+    for(int i=0; i < NUM_OF_SIG_HANDLERS; i++){
+      if(isSignalOn(p, i)){
+          cprintf("%d", i);
+        if(i < NUM_OF_SIG_HANDLERS-1)
+          cprintf(", ", i);
+      }
+    }
+    cprintf("\n");
+
+
+    cprintf("  mask sigs: ");
+    for(int i=0; i < NUM_OF_SIG_HANDLERS; i++){
+      if(isMaskOn(p, i)){
+          cprintf("%d", i);
+        if(i < NUM_OF_SIG_HANDLERS-1)
+          cprintf(", ", i);
+      }
+    }
+    cprintf("\n");
+    
+
+    cprintf("  sig handlers: ");
+    for(int i=0; i < NUM_OF_SIG_HANDLERS; i++){
+      if((int)p->sig_handlers[i] != SIG_DFL){
+          cprintf("sig %d -> %p", i, p->sig_handlers[i]);
+        if(i < NUM_OF_SIG_HANDLERS-1)
+          cprintf(", ");
+      }
+    }
     // if(p->state == SLEEPING){
     //   getcallerpcs((uint*)p->context->ebp+2, pc);
     //   for(i=0; i<10 && pc[i] != 0; i++)
@@ -786,9 +828,12 @@ signal(int signum, sighandler_t handler){
 void
 sigret(void){
   
+  cprintf("entered sigret..\n");
+  
   struct proc *p = myproc();
   //p->tf = p->user_trap_backup;
   memmove((void*)p->tf, &p->user_trap_backup, sizeof(struct trapframe));
+  cprintf("exiting sigret..\n");
 }
 
 int
@@ -804,7 +849,7 @@ sigFaild(int signum, sighandler_t handler) {
 
 int
 setSignal(struct proc *p, int signum, int swtch){
-
+  
   if(setSigFaild(p, signum, swtch)){
 
     return -1;
@@ -825,7 +870,7 @@ turnOnSignal(struct proc *p, int signum){
   if(!isValidSig(signum))
     return 0;
 
-  cprintf("setting signal %d of proc %d on\n", signum, p->pid);
+  cprintf("turning signal %d of proc %d on\n", signum, p->pid);
   p->pending_sigs |= 1 << signum;
   return 1;
 }
@@ -839,7 +884,7 @@ turnDownSignal(struct proc *p, int signum){
   if(!isValidSig(signum))
     return 0;
 
-  cprintf("setting signal %d of proc %d off\n", signum, myproc()->pid);
+  cprintf("turning signal %d of proc %d off\n", signum, myproc()->pid);
   p->pending_sigs &= ~(1 << signum);
   return 1;
 }
@@ -869,6 +914,7 @@ sigKillDefaultHandle(struct proc *p){
   cprintf("handeling sigkill defaultly..\n");
 
   p->killed = 1;
+
   // cas(&p->state, RUNNING, RUNNABLE);
   // cas(&p->state, SLEEPING, RUNNABLE);
 
@@ -917,22 +963,21 @@ handlePendingSigs(/*???*/){
   if(p == 0)
     return;
 
-  // if(p->sig_handlers == 0)
-  //   return;
-
+  uint masks_backup = p->sig_masks; //backup masks
+  
   for(int sig=0; sig < 32; sig++){
 
-    if(!isSignalOn(p, sig)) // if currently iterated signal is on..
-      continue;
-    
-    if(isMaskOn(p, sig))
-      continue;
+    uint masks_backup_iter = p->sig_masks; //backup masks
+    turnOnAllMasksBut(p, sig); // turn on all signal masks except for the current handled signal
 
-    if((int)p->sig_handlers[sig] == SIG_IGN)
+    if(!isSignalOn(p, sig) ||
+        isMaskOn(p, sig)   ||
+        (int)p->sig_handlers[sig] == SIG_IGN) { // if currently iterated signal is on..
+      p->sig_masks = masks_backup_iter; //restore masks
       continue;
+    }
     
-    cprintf("signal %d is turned on. starting to handle...\n", sig);
-
+    
     if((int)p->sig_handlers[sig] == SIG_DFL){
 
       switch(sig) {
@@ -940,6 +985,7 @@ handlePendingSigs(/*???*/){
 
             //if((int)p->sig_handlers[sig] == SIG_DFL)
             sigKillDefaultHandle(p);
+            setSignal(p, SIGKILL, 0); //turn off SIGKILL
             break;
 
         case SIGSTOP:
@@ -954,17 +1000,18 @@ handlePendingSigs(/*???*/){
 
          default:
             sigKillDefaultHandle(p);
+            setSignal(p, sig, 0); //turn off sig
       }
     }
     else{
 
-      // if((int)p->sig_handlers[sig] == SIG_DFL)
-      //   sigKillDefaultHandle(p);
-      // else
         handleUserModeSigs(sig);
     }
-    
+
+    p->sig_masks = masks_backup_iter; //restore masks
   }
+  
+  p->sig_masks = masks_backup; //restore masks
 }
 
 int
@@ -981,27 +1028,89 @@ void
 handleUserModeSigs(int sig){
 
   struct proc *p = myproc();
-  int handler_arg = sig;
-  
-  // let ebp point on the start of the frame
-  p->tf->ebp = p->tf->esp;
-
-  //push handler argument to stack
-  memmove((void*)p->tf->esp, (void*)&handler_arg, sizeof(int));
-  p->tf->esp += sizeof(int);
-  
-  //push handler retAddress to stack
-  memmove((void*)p->tf->esp, (void*)sigret, sizeof(int*)); // p->tf->eip is probably not updated, but it should be ovverriden later by the sigret() address
-  p->tf->esp += sizeof(int*);
 
   //backup trapframe
-  memmove(&p->user_trap_backup, (void*)p->tf, sizeof(struct trapframe));
-  //p->tf->esp + sizeof(struct trapframe);
-  
-  //push handler address to stack
-  memmove((void*)p->tf->esp, (void*)p->sig_handlers[sig], sizeof(void*));
-  p->tf->esp += sizeof(void*);
+  memmove(&p->user_trap_backup, p->tf, sizeof(struct trapframe));
 
-  // set the handler address to be the next instruction to execute
+  setSignal(p, sig, 0);
+  int sigret_call_code_len = (uint)&sigret_L_end - (uint)&sigret_L_start;
+
+  p->tf->esp -= sigret_call_code_len;
+  memmove((void*)p->tf->esp, sigret_L_start, sigret_call_code_len);
+
+  *((int*)(p->tf->esp-4)) = sig;
+  *((int*)(p->tf->esp-8)) = p->tf->esp;
+  p->tf->esp -= 8;
   p->tf->eip = (uint)p->sig_handlers[sig];
+}
+
+int
+setMask(struct proc *p, int signum, int swtch){
+  
+  if(setSigFaild(p, signum, swtch)){
+
+    return 0;
+  }
+
+  if(swtch)
+    p->sig_masks |= 1 << signum;    //turn on sig
+  else
+    p->sig_masks &= ~(1 << signum); //turn off sig
+
+  return 1;
+}
+
+/*
+*DO NOT USE THIS DIRECTLY, BUT ONLY BY setSignal(..., 1)
+*/
+int
+turnOnMask(struct proc *p, int signum){
+  
+  if(!isValidSig(signum))
+    return 0;
+
+  return setMask(p, signum, 1);
+}
+
+/*
+*DO NOT USE THIS DIRECTLY, BUT ONLY BY setSignal(..., 0)
+*/
+int
+turnOffMask(struct proc *p, int signum){
+  
+  if(!isValidSig(signum))
+    return 0;
+
+  return setMask(p, signum, 0);
+}
+
+// void
+// turnOnAllMasks(struct proc *p){
+
+//   for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
+//     if(!turnOnMask(p, sig))
+//       panic("Cannot turn mask properly..");
+//   }
+// }
+
+void
+turnOnAllMasksBut(struct proc *p, int sig_mask){
+
+  for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
+    if(sig != sig_mask){
+      // cprintf("sig_mask to avoid: %d\n", sig_mask);
+      // cprintf("current sig: %d\n", sig);
+      if(!turnOnMask(p, sig))
+        panic("Cannot turn mask properly..");
+    }
+  }
+}
+
+void
+turnOffAllMasks(struct proc *p){
+
+  for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
+    if(!turnOffMask(p, sig))
+      panic("Cannot turn mask properly..");
+  }
 }
