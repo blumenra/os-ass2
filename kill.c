@@ -12,6 +12,7 @@ main(int argc, char **argv)
     exit();
   }
   //for(i=1; i<argc; i++)
+  // kill(atoi(argv[1]), 19); // for debugging
   kill(atoi(argv[1]), atoi(argv[2]));
 
   exit();

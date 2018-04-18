@@ -18,7 +18,7 @@ int handleSigStop(struct proc *p);
 int handleSigCont(struct proc *p);
 int isValidSig(int signum);
 int isMaskOn(struct proc *p, int sig);
-void handleUserModeSigs(struct proc *p, int sig);
+void handleUserModeSigs(int sig);
 void handlePendingSigs(/*???*/);
   
 
@@ -430,14 +430,8 @@ scheduler(void)
         continue;
       }
 
-      if(isSignalOn(p, SIGSTOP)){
-        if(isSignalOn(p, SIGCONT)){
-          setSignal(p, SIGSTOP, 0); //turn off SIGSTOP
-          setSignal(p, SIGCONT, 0); //turn off SIGCONT
-        }
-        else{
-          continue;
-        }
+      if(isSignalOn(p, SIGSTOP) && !isSignalOn(p, SIGCONT)){
+        continue;
       }
 
       // Switch to chosen process.  It is the process's job
@@ -659,6 +653,8 @@ wakeup1(void *chan)
           
           // Change state to RUNNABLE here and not wait for scheduler() to change
           // after the context switch because we want to wake them up imidiatley
+
+          //cprintf("Before wakeup panic: state: %d\n", p->state);
           if (!cas(&p->state, NEG_RUNNABLE, RUNNABLE))
             panic("wakeup1: cas failed");
         }
@@ -686,6 +682,7 @@ kill(int pid, int signum)
 {
   struct proc *p;
 
+  cprintf("Going to set %d signal on for proc %d\n", signum, pid);
   //acquire(&ptable.lock);
   pushcli();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -696,7 +693,7 @@ kill(int pid, int signum)
       /*
       * should be moved to sigkill handler
       */
-      p->killed = 1;
+      //p->killed = 1;
 
 
       // Wake process from sleep if necessary.
@@ -708,7 +705,7 @@ kill(int pid, int signum)
       /*
       * should be moved to sigkill handler
       */
-      cas(&p->state, SLEEPING, RUNNABLE);
+      //cas(&p->state, SLEEPING, RUNNABLE);
       
 
       //release(&ptable.lock);
@@ -788,7 +785,10 @@ signal(int signum, sighandler_t handler){
 
 void
 sigret(void){
-  //cprintf("Inside sigret:)))");
+  
+  struct proc *p = myproc();
+  //p->tf = p->user_trap_backup;
+  memmove((void*)p->tf, &p->user_trap_backup, sizeof(struct trapframe));
 }
 
 int
@@ -825,6 +825,7 @@ turnOnSignal(struct proc *p, int signum){
   if(!isValidSig(signum))
     return 0;
 
+  cprintf("setting signal %d of proc %d on\n", signum, p->pid);
   p->pending_sigs |= 1 << signum;
   return 1;
 }
@@ -838,6 +839,7 @@ turnDownSignal(struct proc *p, int signum){
   if(!isValidSig(signum))
     return 0;
 
+  cprintf("setting signal %d of proc %d off\n", signum, myproc()->pid);
   p->pending_sigs &= ~(1 << signum);
   return 1;
 }
@@ -864,8 +866,11 @@ isSignalOn(struct proc *p, int signal){
 int
 sigKillDefaultHandle(struct proc *p){
   
+  cprintf("handeling sigkill defaultly..\n");
+
   p->killed = 1;
-  cas(&p->state, SLEEPING, RUNNABLE);
+  // cas(&p->state, RUNNING, RUNNABLE);
+  // cas(&p->state, SLEEPING, RUNNABLE);
 
   return 0;
 }
@@ -873,12 +878,28 @@ sigKillDefaultHandle(struct proc *p){
 int
 sigStopDefaultHandle(struct proc *p){
   
+  cprintf("handeling sigStop defaultly..\n");
+
+  if(isSignalOn(p, SIGCONT)){
+    setSignal(p, SIGSTOP, 0); //turn off SIGSTOP
+    setSignal(p, SIGCONT, 0); //turn off SIGCONT
+    return 1;
+  }
+
   return 0;
 }
 
 int
 sigContDefaultHandle(struct proc *p){
   
+  cprintf("handeling sigCont defaultly..\n");
+  if(isSignalOn(p, SIGSTOP)){
+    setSignal(p, SIGSTOP, 0); //turn off SIGSTOP
+    return 1;
+  }
+
+  setSignal(p, SIGCONT, 0); //turn off SIGCONT
+
   return 0;
 }
 
@@ -893,6 +914,12 @@ handlePendingSigs(/*???*/){
 
   struct proc *p = myproc();   // = process we handle..(how to know???)
   
+  if(p == 0)
+    return;
+
+  // if(p->sig_handlers == 0)
+  //   return;
+
   for(int sig=0; sig < 32; sig++){
 
     if(!isSignalOn(p, sig)) // if currently iterated signal is on..
@@ -904,27 +931,39 @@ handlePendingSigs(/*???*/){
     if((int)p->sig_handlers[sig] == SIG_IGN)
       continue;
     
+    cprintf("signal %d is turned on. starting to handle...\n", sig);
 
-    switch(sig) {
-      case SIGKILL:
+    if((int)p->sig_handlers[sig] == SIG_DFL){
 
-          if((int)p->sig_handlers[sig] == SIG_DFL)
+      switch(sig) {
+        case SIGKILL:
+
+            //if((int)p->sig_handlers[sig] == SIG_DFL)
             sigKillDefaultHandle(p);
-      
-      case SIGSTOP:
-          if((int)p->sig_handlers[sig] == SIG_DFL)
+            break;
+
+        case SIGSTOP:
+            //if((int)p->sig_handlers[sig] == SIG_DFL)
             sigStopDefaultHandle(p);
+            break;
 
-      case SIGCONT:
-          if((int)p->sig_handlers[sig] == SIG_DFL)
+        case SIGCONT:
+            //if((int)p->sig_handlers[sig] == SIG_DFL)
             sigContDefaultHandle(p);
-      
-       default:
-          if((int)p->sig_handlers[sig] == SIG_DFL)
+            break;
+
+         default:
             sigKillDefaultHandle(p);
-          else
-            handleUserModeSigs(p, sig);
+      }
     }
+    else{
+
+      // if((int)p->sig_handlers[sig] == SIG_DFL)
+      //   sigKillDefaultHandle(p);
+      // else
+        handleUserModeSigs(sig);
+    }
+    
   }
 }
 
@@ -939,26 +978,30 @@ isMaskOn(struct proc *p, int sig){
 } 
 
 void
-handleUserModeSigs(struct proc *p, int sig){
+handleUserModeSigs(int sig){
 
+  struct proc *p = myproc();
   int handler_arg = sig;
   
-  //backup trapframe
-  p->user_trap_backup = p->tf;
-  
-  //push handler argument to stack
+  // let ebp point on the start of the frame
   p->tf->ebp = p->tf->esp;
-  p->tf->ebp = sig;
 
-  //push retAddress
+  //push handler argument to stack
+  memmove((void*)p->tf->esp, (void*)&handler_arg, sizeof(int));
+  p->tf->esp += sizeof(int);
+  
+  //push handler retAddress to stack
+  memmove((void*)p->tf->esp, (void*)sigret, sizeof(int*)); // p->tf->eip is probably not updated, but it should be ovverriden later by the sigret() address
+  p->tf->esp += sizeof(int*);
 
-  // call the handler
-  p->sig_handlers[sig](handler_arg);
+  //backup trapframe
+  memmove(&p->user_trap_backup, (void*)p->tf, sizeof(struct trapframe));
+  //p->tf->esp + sizeof(struct trapframe);
+  
+  //push handler address to stack
+  memmove((void*)p->tf->esp, (void*)p->sig_handlers[sig], sizeof(void*));
+  p->tf->esp += sizeof(void*);
 
-
-  //push handler args
-
-  //change ret address to sigret function
-  int retAddressSP = p->tf->ebp + sizeof(*int);
-  memmove(retAddressSP, sigret, sizeof(*int));
+  // set the handler address to be the next instruction to execute
+  p->tf->eip = (uint)p->sig_handlers[sig];
 }
