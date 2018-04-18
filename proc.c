@@ -941,5 +941,24 @@ isMaskOn(struct proc *p, int sig){
 void
 handleUserModeSigs(struct proc *p, int sig){
 
+  int handler_arg = sig;
+  
+  //backup trapframe
+  p->user_trap_backup = p->tf;
+  
+  //push handler argument to stack
+  p->tf->ebp = p->tf->esp;
+  p->tf->ebp = sig;
 
+  //push retAddress
+
+  // call the handler
+  p->sig_handlers[sig](handler_arg);
+
+
+  //push handler args
+
+  //change ret address to sigret function
+  int retAddressSP = p->tf->ebp + sizeof(*int);
+  memmove(retAddressSP, sigret, sizeof(*int));
 }

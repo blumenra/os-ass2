@@ -202,13 +202,13 @@ struct trapframe {
 
   // below here defined by x86 hardware
   uint err;
-  uint eip;
+  uint eip; // Instruction pointer
   ushort cs;
   ushort padding5;
   uint eflags;
 
   // below here only when crossing rings, such as from user to kernel
-  uint esp;
+  uint esp; // Stack pointer
   ushort ss;
   ushort padding6;
 };
