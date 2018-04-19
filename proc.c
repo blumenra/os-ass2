@@ -778,12 +778,10 @@ procdump(void)
     cprintf("\n");
     
 
-    cprintf("  sig handlers: ");
+    cprintf("  sig handlers: \n");
     for(int i=0; i < NUM_OF_SIG_HANDLERS; i++){
       if((int)p->sig_handlers[i] != SIG_DFL){
-          cprintf("sig %d -> %p", i, p->sig_handlers[i]);
-        if(i < NUM_OF_SIG_HANDLERS-1)
-          cprintf(", ");
+          cprintf("    sig %d -> %d\n", i, p->sig_handlers[i]);
       }
     }
     // if(p->state == SLEEPING){
@@ -964,35 +962,29 @@ handlePendingSigs(/*???*/){
       continue;
     }
     
-    
-    if((int)p->sig_handlers[sig] == SIG_DFL){
+    switch((int)p->sig_handlers[sig]){
 
-      switch(sig) {
-        case SIGKILL:
+      case SIG_DFL:
 
-            //if((int)p->sig_handlers[sig] == SIG_DFL)
-            sigKillDefaultHandle(p);
-            setSignal(p, SIGKILL, 0); //turn off SIGKILL
-            break;
+          sigKillDefaultHandle(p);
+          setSignal(p, sig, 0); //turn off sig
+          break;
 
-        case SIGSTOP:
-            //if((int)p->sig_handlers[sig] == SIG_DFL)
-            sigStopDefaultHandle(p);
-            break;
+      case SIGKILL:
+          sigKillDefaultHandle(p);
+          setSignal(p, SIGKILL, 0); //turn off SIGKILL
+          break;
 
-        case SIGCONT:
-            //if((int)p->sig_handlers[sig] == SIG_DFL)
-            sigContDefaultHandle(p);
-            break;
+      case SIGSTOP:
+          sigStopDefaultHandle(p);
+          break;
 
-         default:
-            sigKillDefaultHandle(p);
-            setSignal(p, sig, 0); //turn off sig
-      }
-    }
-    else{
+      case SIGCONT:
+          sigContDefaultHandle(p);
+          break;
 
-        handleUserModeSigs(sig);
+      default:
+          handleUserModeSigs(sig);
     }
 
     p->sig_masks = masks_backup_iter; //restore masks
@@ -1114,19 +1106,23 @@ initializeSignals(struct proc *p){
 
     switch(sig){
       case SIG_IGN:
-        p->sig_handlers[i] = (void*) SIG_IGN;
+        p->sig_handlers[sig] = (void*) SIG_IGN;
+        break;
         
       case SIGKILL:
-        p->sig_handlers[i] = (void*) SIGKILL;
+        p->sig_handlers[sig] = (void*) SIGKILL;
+        break;
       
       case SIGSTOP:
-        p->sig_handlers[i] = (void*) SIGSTOP;
+        p->sig_handlers[sig] = (void*) SIGSTOP;
+        break;
 
       case SIGCONT:
-        p->sig_handlers[i] = (void*) SIGCONT;
+        p->sig_handlers[sig] = (void*) SIGCONT;
+        break;
 
       default:
-        p->sig_handlers[i] = (void*) SIG_DFL;
+        p->sig_handlers[sig] = (void*) SIG_DFL;
     }
   }
 }

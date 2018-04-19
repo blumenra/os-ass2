@@ -103,11 +103,33 @@ exec(char *path, char **argv)
   switchuvm(curproc);
   freevm(oldpgdir);
 
-  //RESET ALL SIGNAL HANDLERS
-  for(int k=0; k < NUM_OF_SIG_HANDLERS; k++){
+  //RESET ALL CUSTOMMMM SIGNAL HANDLERS
+  for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
 
-    if((int)curproc->sig_handlers[k] != SIG_IGN && (int)curproc->sig_handlers[k] != SIG_DFL)
-      curproc->sig_handlers[k] = (void*) SIG_DFL;
+    if((int)curproc->sig_handlers[sig] != SIG_DFL &&
+      (int)curproc->sig_handlers[sig] != SIG_IGN){
+
+      switch(sig){
+        case SIG_IGN:
+            curproc->sig_handlers[sig] = (void*) SIG_IGN;
+            break;
+
+        case SIGKILL:
+            curproc->sig_handlers[sig] = (void*) SIGKILL;
+            break;
+
+        case SIGSTOP:
+            curproc->sig_handlers[sig] = (void*) SIGSTOP;
+            break;
+
+        case SIGCONT:
+            curproc->sig_handlers[sig] = (void*) SIGCONT;
+            break;
+
+        default:
+            curproc->sig_handlers[sig] = (void*) SIG_DFL;
+      }
+    }
   }
 
   return 0;

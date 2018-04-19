@@ -181,7 +181,10 @@ test4(void){
     printf(1, "killRet: %d\n", signal(5, blaTest));
     printf(1, "killRet: %d\n", signal(66, blaTest));
     printf(1, "killRet: %d\n", signal(5, blaTest));
-    printf(1, "killRet: %d\n", signal(17, blaTest));
+    printf(1, "killRet: %d\n", signal(SIGCONT, blaTest));
+    printf(1, "killRet: %d\n", signal(SIGCONT, blaTest));
+    printf(1, "killRet: %d\n", signal(SIGKILL, blaTest));
+    printf(1, "killRet: %d\n", signal(SIGKILL, blaTest));
 }
 
 void
