@@ -10,6 +10,7 @@
 extern void sigret_L_start(void);
 extern void sigret_L_end(void);
 
+void initializeSignals(struct proc *p);
 int setSignal(struct proc *p, int signum, int swtch);
 int setSigFaild(struct proc *p, int signum, int swtch);
 int sigFaild(int signum, sighandler_t handler);
@@ -182,13 +183,7 @@ allocproc(void)
 
 
   //SIGNAL HANDLING
-  p->pending_sigs = 0;
-  p->sig_masks = 0;
-
-  for(int i=0; i < NUM_OF_SIG_HANDLERS; i++){
-
-    p->sig_handlers[i] = (void*) SIG_DFL;
-  }
+  initializeSignals(p);
 
   return p;
 }
@@ -803,9 +798,10 @@ procdump(void)
 uint
 sigprocmask(uint sigmask){
 
-  uint oldSigmask = myproc()->sig_masks;
+  struct proc *p = myproc();
 
-  myproc()->sig_masks = sigmask;
+  uint oldSigmask = isMaskOn(p, sigmask);
+  turnOnMask(p, sigmask);
 
   return oldSigmask;
 }
@@ -953,6 +949,7 @@ handlePendingSigs(/*???*/){
   if(p == 0)
     return;
 
+  pushcli();
   uint masks_backup = p->sig_masks; //backup masks
   
   for(int sig=0; sig < 32; sig++){
@@ -1002,6 +999,8 @@ handlePendingSigs(/*???*/){
   }
   
   p->sig_masks = masks_backup; //restore masks
+
+  popcli();
 }
 
 int
@@ -1074,14 +1073,14 @@ turnOffMask(struct proc *p, int signum){
   return setMask(p, signum, 0);
 }
 
-// void
-// turnOnAllMasks(struct proc *p){
+void
+turnOnAllMasks(struct proc *p){
 
-//   for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
-//     if(!turnOnMask(p, sig))
-//       panic("Cannot turn mask properly..");
-//   }
-// }
+  for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
+    if(!turnOnMask(p, sig))
+      panic("Cannot turn mask properly..");
+  }
+}
 
 void
 turnOnAllMasksBut(struct proc *p, int sig_mask){
@@ -1102,5 +1101,32 @@ turnOffAllMasks(struct proc *p){
   for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
     if(!turnOffMask(p, sig))
       panic("Cannot turn mask properly..");
+  }
+}
+
+void
+initializeSignals(struct proc *p){
+  
+  p->pending_sigs = 0;
+  p->sig_masks = 0;
+
+  for(int sig=0; sig < NUM_OF_SIG_HANDLERS; sig++){
+
+    switch(sig){
+      case SIG_IGN:
+        p->sig_handlers[i] = (void*) SIG_IGN;
+        
+      case SIGKILL:
+        p->sig_handlers[i] = (void*) SIGKILL;
+      
+      case SIGSTOP:
+        p->sig_handlers[i] = (void*) SIGSTOP;
+
+      case SIGCONT:
+        p->sig_handlers[i] = (void*) SIGCONT;
+
+      default:
+        p->sig_handlers[i] = (void*) SIG_DFL;
+    }
   }
 }
