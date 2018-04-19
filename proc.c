@@ -136,7 +136,7 @@ allocproc(void)
 
   /*
     run over the ptable and find the first unsued proc.
-    if found the break from the for loop and do cas.
+    if found then break from the for loop and do cas.
     The thing is that if the state of p remains UNSUSED until cas, it will change to EMBRYO and get out of the while loop.
     otherwise, the state was changed until cas and then cas will fail and we will look for another UNUSED proc from the beginning.
     if we went all over the ptable and didnt find an UNUSED proc, it means that the table is full of necessary procs and the allocproc function should fail (return 0).
@@ -435,6 +435,7 @@ scheduler(void)
       }
 
       if(isSignalOn(p, SIGSTOP) && !isSignalOn(p, SIGCONT)){
+        cas(&p->state, RUNNING, RUNNABLE);
         continue;
       }
 
@@ -691,7 +692,27 @@ kill(int pid, int signum)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
 
-      setSignal(p, signum, 1);
+      int ret = -1;
+
+      /*
+      * if proc is sleeping so ignore SIGSTOP
+      */
+      if((signum == SIGSTOP && p->state == SLEEPING) ||
+        (signum == SIGSTOP && p->state == NEG_SLEEPING)){
+
+        ret = -1;
+      }
+      else{
+
+
+        if(setSignal(p, signum, 1)){
+          if(signum == SIGSTOP){
+            cas(&p->state, RUNNING, RUNNABLE);
+          }
+
+          ret = 0;
+        }
+      }
 
       /*
       * should be moved to sigkill handler
@@ -713,7 +734,7 @@ kill(int pid, int signum)
 
       //release(&ptable.lock);
       popcli();
-      return 0;
+      return ret;
     }
   }
   //release(&ptable.lock);
@@ -821,12 +842,8 @@ signal(int signum, sighandler_t handler){
 void
 sigret(void){
   
-  cprintf("entered sigret..\n");
-  
   struct proc *p = myproc();
-  //p->tf = p->user_trap_backup;
   memmove((void*)p->tf, &p->user_trap_backup, sizeof(struct trapframe));
-  cprintf("exiting sigret..\n");
 }
 
 int
@@ -845,7 +862,7 @@ setSignal(struct proc *p, int signum, int swtch){
   
   if(setSigFaild(p, signum, swtch)){
 
-    return -1;
+    return 0;
   }
 
   if(swtch)
