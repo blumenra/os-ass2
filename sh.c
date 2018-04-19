@@ -173,8 +173,8 @@ main(void)
       runcmd(parsecmd(buf));
     }
 
-    printf(1, "sh: setting handler bla to signal %d\n", 5);
-    signal(5, (sighandler_t)bla);
+    // printf(1, "sh: setting handler bla to signal %d\n", 5);
+    // signal(5, (sighandler_t)bla);
     wait();
   }
   exit();
