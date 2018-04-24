@@ -10,28 +10,6 @@
 extern void sigret_L_start(void);
 extern void sigret_L_end(void);
 
-void initializeSignals(struct proc *p);
-int setSignal(struct proc *p, int signum, int swtch);
-int setSigFaild(struct proc *p, int signum, int swtch);
-int sigFaild(int signum, sighandler_t handler);
-int turnOnSignal(struct proc *p, int signum);
-int turnDownSignal(struct proc *p, int signum);
-int isSignalOn(struct proc *p, int signal);
-int handleSigKill(struct proc *p);
-int handleSigStop(struct proc *p);
-int handleSigCont(struct proc *p);
-int isValidSig(int signum);
-int isMaskOn(struct proc *p, int sig);
-void handleUserModeSigs(int sig);
-void handlePendingSigs(/*???*/);
-int setMask(struct proc *p, int signum, int swtch);
-int turnOnMask(struct proc *p, int signum);
-int turnOffMask(struct proc *p, int signum);
-void turnOnAllMasks(struct proc *p);
-void turnOffAllMasks(struct proc *p);
-void turnOnAllMasksBut(struct proc *p, int sig_mask);
-  
-
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];

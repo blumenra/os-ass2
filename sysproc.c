@@ -7,6 +7,7 @@
 #include "mmu.h"
 #include "proc.h"
 
+
 int
 sys_fork(void)
 {
@@ -71,7 +72,7 @@ sys_sleep(void)
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
-    if(myproc()->killed){
+    if(myproc()->killed || (isSignalOn(myproc(), SIGKILL) && !isMaskOn(myproc(), SIGKILL))){
       release(&tickslock);
       return -1;
     }
@@ -115,7 +116,6 @@ sys_signal(void){
   if(argptr(1, (void*)&sigHandler, sizeof(sigHandler)) < 0)
     return -1;
 
-  //maybe the previous handler should be return here. have a dilema if do casting or change the return value...
   return (int)signal(signum, sigHandler);
 }
 

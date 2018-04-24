@@ -1795,9 +1795,9 @@ main(int argc, char *argv[])
   forktest();
   bigdir(); // slow
 
-  uio();
+ uio();
 
-  exectest();
+ exectest();
 
   exit();
 }
