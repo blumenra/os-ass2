@@ -29,10 +29,6 @@ void test1(void);
 */
 void test2(void);
 
-/*
-* 
-*/
-void test3(void);
 
 /*
 * checks signal() return values correctness
@@ -40,7 +36,7 @@ void test3(void);
 void test4(void);
 
 /*
-* 
+* checks that SIGKILL works
 */
 void test5(void);
 
@@ -169,20 +165,12 @@ test2(void)
     wait();
 }
 
-void
-test3(void){
-    printTestTitle(3);
-    
-    /*
-    * Think of a test
-    */
-}
 
 void
 test4(void){
     printTestTitle(4);
 
-    miniTestForTest4(1, 5, customHandler, -1);
+    miniTestForTest4(1, 5, customHandler, -1); //correct ans = -1 (SIG_DEF)
     miniTestForTest4(2, 66, customHandler, -2);
     miniTestForTest4(3, 5, customHandler, (int)customHandler);
     miniTestForTest4(4, SIGCONT, customHandler, SIGCONT);
@@ -191,14 +179,39 @@ test4(void){
     miniTestForTest4(6, SIGKILL, customHandler, (int)customHandler);
 }
 
+/*
+* father let's son print stars and kills him before finishing priting all stars 
+* and printing the line 'CHILD: exiting..'
+*/
 void
 test5(void){
     printTestTitle(5);
     
-    /*
-    * Think of a test
-    */
+    int sonPid= fork();
+    if (sonPid==0){
+        
+        printf(1, "CHILD: starting..\n");
+        int j;
+        for(j=0 ; j < 50/*LARGE*/ ; j++)
+        {
+            printf(1,"*");
+            int k=0;
+            while(k < 5000000)
+                k++;
+        }
+
+        printf(1, "\n");
+        printf(1,"CHILD: exiting..\n");
+        exit();
+    }
+
+    sleep(100);
+    kill(sonPid,SIGKILL);
+
+    wait();
+    printf(1, "\nFATHER is exiting after killing son..\n");
 }
+    
 
 void
 test6(void){
@@ -266,10 +279,9 @@ main(void){
     test0();
     test1();
     test2();
-    test3();
-    test4();
     test5();
     test6();
+    test4();
 
     exit();
 }
