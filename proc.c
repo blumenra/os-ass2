@@ -537,9 +537,21 @@ sleep(void *chan, struct spinlock *lk)
   pushcli();
   p->chan = chan;
 
-  // Go to sleep.
-  if (!cas(&p->state, RUNNING, NEG_SLEEPING))
-    panic("sleep: cas failed");
+  /*
+  * Go to sleep.
+  * if the state of the process is niether RUNNABLE nor RUNNING it's a bug
+  * (The state can be RUNNABLE because whenever sending SIGSTOP to a RUNNING proc,
+  * its state is changed to RUNNABLE inside kill syscall)
+  */
+  if(!cas(&p->state, RUNNABLE, NEG_SLEEPING) &&
+    !cas(&p->state, RUNNING, NEG_SLEEPING)){
+      panic("sleep: cas failed!");
+  }
+  
+  // if (!cas(&p->state, RUNNING, NEG_SLEEPING)){
+  //   cprintf("State is: %d", p->state);
+  //   panic("sleep: cas failed");
+  // }
 
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
