@@ -45,6 +45,13 @@ void test5(void);
 */
 void test6(void);
 
+void test7(void);
+
+void
+print_test(int i){
+    printf(2, "print_test %d\n", i);
+}
+
 void handler_user_1(int signum)
 {
     int j;
@@ -82,33 +89,40 @@ void test0(void)
 {
     printTestTitle(0);
 
-    int pid= fork();
-    if (pid==0){
-        
-        printf(1, "CHILD: starting..\n");
-        int j;
-        for(j=0 ; j < 50/*LARGE*/ ; j++)
-        {
-            printf(1,"*");
-            int k=0;
-            while(k < 5000000)
-                k++;
+    if(fork() == 0){
+
+        int pid= fork();
+        if (pid==0){
+            
+            printf(1, "CHILD: starting..\n");
+            int j;
+            for(j=0 ; j < 50/*LARGE*/ ; j++)
+            {
+                printf(1,"*");
+                int k=0;
+                while(k < 5000000)
+                    k++;
+            }
+
+            printf(1, "\n");
+            printf(1,"CHILD: exiting..\n");
+            exit();
         }
 
+        sleep(150);
         printf(1, "\n");
-        printf(1,"CHILD: exiting..\n");
+        printf(1, "FATHER: stopping child..\n");
+        kill(pid,SIGSTOP);
+        printf(1, "FATHER: going to sleeping for a while..\n");
+        sleep(500);
+        printf(1, "FATHER: continuing child..\n");
+        kill(pid,SIGCONT);
+
+        wait();
+
         exit();
     }
-
-    sleep(150);
-    printf(1, "\n");
-    printf(1, "FATHER: stopping child..\n");
-    kill(pid,SIGSTOP);
-    printf(1, "FATHER: going to sleeping for a while..\n");
-    sleep(500);
-    printf(1, "FATHER: continuing child..\n");
-    kill(pid,SIGCONT);
-
+    
     wait();
 }
 
@@ -117,25 +131,32 @@ test1(void)
 {
     printTestTitle(1);
 
-    int signum = 10;
+    if(fork() == 0){
 
-    int sonPid = fork();
-    if(sonPid == 0){
+        int signum = 10;
 
-        //son running
-        printf(1, "SON: setting signal %d to custom function..\n", signum);
-        signal(signum, customHandler);
-        printf(1, "SON: going to sleep. when i'll wake up i'll execute the custom function..\n");
-        sleep(500);
+        int sonPid = fork();
+        if(sonPid == 0){
 
-        printf(1, "SON: exiting..\n");
+            //son running
+            printf(1, "SON: setting signal %d to custom function..\n", signum);
+            signal(signum, customHandler);
+            printf(1, "SON: going to sleep. when i'll wake up i'll execute the custom function..\n");
+            sleep(500);
+
+            printf(1, "SON: exiting..\n");
+            exit();
+        }
+
+        //father running
+        sleep(100);
+        printf(1, "FATHER: sending signal %d to child..\n", signum);
+        kill(sonPid, signum);
+
+        wait();
+
         exit();
     }
-
-    //father running
-    sleep(100);
-    printf(1, "FATHER: sending signal %d to child..\n", signum);
-    kill(sonPid, signum);
 
     wait();
 }
@@ -145,22 +166,29 @@ test2(void)
 {
     printTestTitle(2);
 
-    int pid= fork();
-    if (pid==0){
-        
-        printf(1, "CHILD: going to sleep..\n");
-        sleep(300);
-        printf(1,"CHILD: woke up!\n");
+    if(fork() ==0){
+
+        int pid= fork();
+        if (pid==0){
+            
+            printf(1, "CHILD: going to sleep..\n");
+            sleep(300);
+            printf(1,"CHILD: woke up!\n");
+
+            exit();
+        }
+
+        sleep(150);
+        printf(1, "\n");
+        printf(1, "FATHER: stopping child..\n");
+        kill(pid,SIGSTOP);
+        printf(1, "FATHER: going to sleeping for a while..\n");
+        sleep(500);
+
+        wait();
 
         exit();
     }
-
-    sleep(150);
-    printf(1, "\n");
-    printf(1, "FATHER: stopping child..\n");
-    kill(pid,SIGSTOP);
-    printf(1, "FATHER: going to sleeping for a while..\n");
-    sleep(500);
 
     wait();
 }
@@ -170,13 +198,20 @@ void
 test4(void){
     printTestTitle(4);
 
-    miniTestForTest4(1, 5, customHandler, -1); //correct ans = -1 (SIG_DEF)
-    miniTestForTest4(2, 66, customHandler, -2);
-    miniTestForTest4(3, 5, customHandler, (int)customHandler);
-    miniTestForTest4(4, SIGCONT, customHandler, SIGCONT);
-    miniTestForTest4(5, SIGCONT, customHandler, (int)customHandler);
-    miniTestForTest4(6, SIGKILL, customHandler, SIGKILL);
-    miniTestForTest4(6, SIGKILL, customHandler, (int)customHandler);
+    if(fork() == 0){
+
+        miniTestForTest4(1, 5, customHandler, -1); //correct ans = -1 (SIG_DEF)
+        miniTestForTest4(2, 66, customHandler, -2);
+        miniTestForTest4(3, 5, customHandler, (int)customHandler);
+        miniTestForTest4(4, SIGCONT, customHandler, SIGCONT);
+        miniTestForTest4(5, SIGCONT, customHandler, (int)customHandler);
+        miniTestForTest4(6, SIGKILL, customHandler, SIGKILL);
+        miniTestForTest4(6, SIGKILL, customHandler, (int)customHandler);
+
+        exit();
+    }
+
+    wait();
 }
 
 /*
@@ -186,54 +221,130 @@ test4(void){
 void
 test5(void){
     printTestTitle(5);
-    
-    int sonPid= fork();
-    if (sonPid==0){
-        
-        printf(1, "CHILD: starting..\n");
-        int j;
-        for(j=0 ; j < 50/*LARGE*/ ; j++)
-        {
-            printf(1,"*");
-            int k=0;
-            while(k < 5000000)
-                k++;
+
+    if(fork() == 0){
+
+        int sonPid= fork();
+        if (sonPid==0){
+            
+            printf(1, "CHILD: starting..\n");
+            int j;
+            for(j=0 ; j < 50/*LARGE*/ ; j++)
+            {
+                printf(1,"*");
+                int k=0;
+                while(k < 5000000)
+                    k++;
+            }
+
+            printf(1, "\n");
+            printf(1,"CHILD: exiting..\n");
+            exit();
         }
 
-        printf(1, "\n");
-        printf(1,"CHILD: exiting..\n");
+        sleep(100);
+        kill(sonPid,SIGKILL);
+
+        wait();
+        printf(1, "\nFATHER is exiting after killing son..\n");
+
         exit();
     }
-
-    sleep(100);
-    kill(sonPid,SIGKILL);
-
+    
     wait();
-    printf(1, "\nFATHER is exiting after killing son..\n");
 }
     
 
 void
 test6(void){
-    printTestTitle(6);
 
-    int sonPid = fork();
-    if(sonPid == 0){
+    if(fork() == 0){
 
-        sleep(400);
-        printf(1, "SON woke up!\n");
+        printTestTitle(6);
+
+        int sonPid = fork();
+        if(sonPid == 0){
+
+            sleep(400);
+            printf(1, "SON woke up!\n");
+
+            exit();
+        }
+
+        sleep(100);
+
+
+        miniTestForTest6(1, sonPid, 31, 0);
+        miniTestForTest6(2, sonPid, 32, -1);
+        miniTestForTest6(3, 666, 0, -1);
+        miniTestForTest6(4, 666, -1, -1);
+        miniTestForTest6(5, sonPid, SIGSTOP, -1);
+
+        wait();
+
+        exit();
+    }
+    
+    wait();
+}
+
+void test7(void){
+    printTestTitle(7);
+    
+    if(fork() == 0){
+
+        signal(7, &print_test);
+
+        int pid= fork();
+        if (pid == 0){
+            int i =0;
+            while (1){
+                printf(2, "main- im a child %d\n", i++);
+                sleep(1);
+            }
+        }
+
+        printf(2, "main- arrive %d\n", pid);
+
+        sleep(1);
+
+        printf(2, "main- send signal\n");
+        kill(pid, 7);
+
+        printf(2, "main- stop the child\n");
+        kill(pid, 17);
+        kill(pid, 7);
+
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+        printf(2, "main- stop the stoped\n");
+
+        printf(2, "main- cont\n");
+        kill(pid, 19);
+
+        sleep(1);
+        printf(2, "main- Kill child\n");
+        kill(pid, 9);
+
+        sleep(100);
+        printf(2, "main- Kill father\n");
+        
+        wait();
 
         exit();
     }
 
-    sleep(100);
-
-
-    miniTestForTest6(1, sonPid, 31, 0);
-    miniTestForTest6(2, sonPid, 32, -1);
-    miniTestForTest6(3, 666, 0, -1);
-    miniTestForTest6(4, 666, -1, -1);
-    miniTestForTest6(5, sonPid, SIGSTOP, -1);
 
     wait();
 }
@@ -248,7 +359,7 @@ customHandler(int i){
 void
 printTestTitle(int testNum){
     
-    printf(1, "***TEST %d***\n", testNum);
+    printf(1, "\n***TEST %d***\n", testNum);
 }
 
 void
@@ -279,9 +390,11 @@ main(void){
     test0();
     test1();
     test2();
+    test4();
     test5();
     test6();
-    test4();
+
+    test7();
 
     exit();
 }
