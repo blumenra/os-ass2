@@ -330,6 +330,10 @@ void test7(void){
         printf(2, "main- stop the stoped\n");
         printf(2, "main- stop the stoped\n");
 
+        // for(int j=0; j<100000; j++){
+        //     ;
+        // }
+
         printf(2, "main- cont\n");
         kill(pid, 19);
 
@@ -393,8 +397,8 @@ main(void){
     test4();
     test5();
     test6();
-
-    test7();
+    // for(int i=0; i<10; i++)
+        test7();
 
     exit();
 }
